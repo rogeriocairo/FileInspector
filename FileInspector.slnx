@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="FileInspector.API/FileInspector.API.csproj" />
+  <Project Path="FileInspector.Application/FileInspector.Application.csproj" />
+  <Project Path="FileInspector.Domain/FileInspector.Domain.csproj" />
+  <Project Path="FileInspector.Infrastructure/FileInspector.Infrastructure.csproj" />
+</Solution>
