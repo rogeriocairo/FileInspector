@@ -67,6 +67,7 @@ FileInspector/
 - .NET 10
 - C#
 - OpenAPI
+- Swagger UI
 
 ## Getting started
 
@@ -88,12 +89,20 @@ dotnet build
 dotnet run --project FileInspector.API
 ```
 
-The API will run locally on the default ASP.NET Core ports, such as:
+The API will run locally at:
 
 ```text
-https://localhost:5001
 http://localhost:5000
+https://localhost:7011
 ```
+
+In the Development environment, open the interactive API documentation at:
+
+```text
+http://localhost:5000/swagger
+```
+
+The OpenAPI document is also available at `http://localhost:5000/openapi/v1.json`.
 
 > The initial scaffold includes a sample endpoint named `GET /weatherforecast`, which can be replaced with the actual file-inspection logic as the project evolves.
 
