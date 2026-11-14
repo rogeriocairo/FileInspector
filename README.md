@@ -21,8 +21,9 @@ This separation helps maintain a clean architecture and supports future growth.
 ## Features
 
 - File and directory inspection
+- Recursive search for duplicate file names
 - Metadata extraction
-- File content validation and analysis
+- File name, extension, size, declared content type, and SHA-256 inspection
 - Structured data processing
 - REST API exposure
 - Extensible integration points for future automation workflows
@@ -41,13 +42,32 @@ Before running the project, make sure you have:
 FileInspector/
 ├── FileInspector.API/
 │   ├── Program.cs
+│   ├── Contracts/Files/FileInspectionResponse.cs
+│   ├── Contracts/Files/FileInspectionUploadRequest.cs
+│   ├── Contracts/Files/DuplicateFileResponse.cs
+│   ├── Configuration/DuplicateFileSearchOptions.cs
+│   ├── Endpoints/DuplicateFilesEndpoints.cs
+│   ├── Endpoints/FilesEndpoints.cs
 │   ├── FileInspector.API.csproj
+│   ├── FileInspector.API.http
 │   ├── appsettings.json
 │   ├── appsettings.Development.json
 │   └── Properties/
 ├── FileInspector.Application/
-│   ├── Class1.cs
+│   ├── Files/
+│   │   ├── FileInspectionService.cs
+│   │   ├── FileInspectionResult.cs
+│   │   ├── FileTooLargeException.cs
+│   │   └── IFileInspectionService.cs
+│   ├── DuplicateFiles/
+│   │   ├── DuplicateFileEntry.cs
+│   │   ├── DuplicateFileSearchService.cs
+│   │   └── IDuplicateFileSearchService.cs
 │   └── FileInspector.Application.csproj
+├── FileInspector.Application.Tests/
+│   ├── DuplicateFileSearchServiceTests.cs
+│   ├── DuplicateFilesEndpointTests.cs
+│   └── FileInspector.Application.Tests.csproj
 ├── FileInspector.Domain/
 │   ├── Class1.cs
 │   └── FileInspector.Domain.csproj
@@ -104,7 +124,53 @@ http://localhost:5000/swagger
 
 The OpenAPI document is also available at `http://localhost:5000/openapi/v1.json`.
 
-> The initial scaffold includes a sample endpoint named `GET /weatherforecast`, which can be replaced with the actual file-inspection logic as the project evolves.
+## Inspect a file
+
+Send a file as `multipart/form-data` using the `file` field:
+
+```bash
+curl -X POST http://localhost:5000/api/files/inspect \
+  -F "file=@./README.md"
+```
+
+The endpoint returns the file name, extension, size in bytes, client-declared content type, and SHA-256 hash. Files larger than 10 MiB are rejected with `413 Payload Too Large`; a missing file is rejected with `400 Bad Request`. The request is streamed and the application does not persist the uploaded file.
+
+The same request can be run from `FileInspector.API.http` in VS Code.
+
+## Find duplicate file names
+
+The API exposes `GET /api/files/duplicates`. It recursively searches for files whose names occur more than once, matching names case-insensitively. Duplicates are identified by name only, not by file content.
+
+The default search root is the `FileInspector.API/Files` directory. The application creates it at startup if needed. To change it, set `FileSearch:AllowedRoot` in `appsettings.json` or override it with the `FileSearch__AllowedRoot` environment variable. Relative configured roots are resolved from the API content directory.
+
+On Windows, set a persistent user environment variable and restart the terminal or IDE:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+    'FileSearch__AllowedRoot',
+    'C:\Your\Search\Root',
+    'User')
+```
+
+For the current terminal session only, use `$env:FileSearch__AllowedRoot = 'C:\Your\Search\Root'` before starting the API.
+
+In Swagger UI, expand **GET `/api/files/duplicates`** to see the optional query parameter named `path`. Leave it blank to search the entire configured base directory, or enter a relative subdirectory such as `Samples` to search recursively under `<base directory>\Samples`. Absolute paths and attempts to traverse outside the base directory are rejected.
+
+Each result contains the file name, size in bytes, last-modified date in UTC, and full file path:
+
+```http
+GET http://localhost:5000/api/files/duplicates?path=Samples
+```
+
+The route is available in Swagger UI and in `FileInspector.API.http`. It returns `400 Bad Request` for invalid paths, `404 Not Found` when the selected directory does not exist, and `200 OK` with an empty list when no duplicate names are found.
+
+## Tests
+
+The xUnit project contains service unit tests and API endpoint tests, including checks that the `path` query cannot escape the configured base directory. Run the tests from the solution root:
+
+```powershell
+dotnet test .\FileInspector.slnx
+```
 
 ## Architecture
 
@@ -121,12 +187,11 @@ This structure favors maintainability, scalability, and automated testing.
 
 Planned next steps:
 
-1. Define the core file inspection models and business rules
-2. Implement validation and analysis services in `Application`
-3. Build persistence and technical integrations in `Infrastructure`
-4. Expose real endpoints in `API`
-5. Add unit and integration tests
-6. Improve API usability and documentation
+1. Add unit and integration tests for the file inspection endpoint
+2. Add tests for recursive duplicate-name search and filesystem edge cases
+3. Inspect file content and identify supported formats
+4. Add appropriate validation and security checks for supported file types
+5. Improve API usability and documentation
 
 ## Contributing
 
