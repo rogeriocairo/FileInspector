@@ -38,6 +38,10 @@ export const deleteFile = async (fullPath: string): Promise<void> => {
   await api.delete('/api/files/delete', { data: { fullPath } })
 }
 
+export const openFileLocation = async (fullPath: string): Promise<void> => {
+  await api.post('/api/files/open-location', { fullPath })
+}
+
 export class ApiClientError extends Error {
   constructor(public error: ApiError) {
     super(error.detail || error.title || 'Erro na API')

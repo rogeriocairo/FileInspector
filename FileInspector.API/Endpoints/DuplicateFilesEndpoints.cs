@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using FileInspector.API.Configuration;
 using FileInspector.API.Contracts.Files;
 using FileInspector.Application.DuplicateFiles;
@@ -23,7 +24,160 @@ public static class DuplicateFilesEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        app.MapDelete("/api/files/delete", DeleteFile)
+            .WithName("DeleteFile")
+            .WithSummary("Delete a file within the configured file root")
+            .Accepts<DeleteFileRequest>("application/json")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        app.MapPost("/api/files/open-location", OpenFileLocation)
+            .WithName("OpenFileLocation")
+            .WithSummary("Open File Explorer with a file selected")
+            .Accepts<OpenFileLocationRequest>("application/json")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented);
+
         return app;
+    }
+
+    private static Results<NoContent, ProblemHttpResult> DeleteFile(
+        [FromBody] DeleteFileRequest request,
+        DuplicateFileSearchOptions options)
+    {
+        var fullPath = ResolveFilePath(options.AllowedRoot, request.FullPath);
+        if (fullPath is null)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid file path",
+                detail: "The path must identify a file inside the configured file search root.");
+        }
+
+        try
+        {
+            if (!File.Exists(fullPath))
+            {
+                return TypedResults.Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "File not found",
+                    detail: "The requested file does not exist inside the configured file search root.");
+            }
+
+            if (ContainsReparsePoint(options.AllowedRoot, fullPath))
+            {
+                return TypedResults.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Invalid file path",
+                    detail: "Files cannot be deleted through symbolic links or other reparse points.");
+            }
+
+            File.Delete(fullPath);
+            return TypedResults.NoContent();
+        }
+        catch (FileNotFoundException)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "File not found",
+                detail: "The requested file does not exist inside the configured file search root.");
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "File not found",
+                detail: "The requested file does not exist inside the configured file search root.");
+        }
+    }
+
+    private static Results<NoContent, ProblemHttpResult> OpenFileLocation(
+        [FromBody] OpenFileLocationRequest request,
+        DuplicateFileSearchOptions options)
+    {
+        var fullPath = ResolveFilePath(options.AllowedRoot, request.FullPath);
+        if (fullPath is null)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Invalid file path",
+                detail: "The path must identify a file inside the configured file search root.");
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status501NotImplemented,
+                title: "File Explorer is unavailable",
+                detail: "Opening a file location is only supported when the API is running on Windows.");
+        }
+
+        try
+        {
+            if (!File.Exists(fullPath))
+            {
+                return TypedResults.Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "File not found",
+                    detail: "The requested file does not exist inside the configured file search root.");
+            }
+
+            if (ContainsReparsePoint(options.AllowedRoot, fullPath))
+            {
+                return TypedResults.Problem(
+                    statusCode: StatusCodes.Status400BadRequest,
+                    title: "Invalid file path",
+                    detail: "File locations cannot be opened through symbolic links or other reparse points.");
+            }
+
+            using var explorer = Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                UseShellExecute = false,
+                ArgumentList = { $"/select,{fullPath}" }
+            });
+
+            if (explorer is null)
+            {
+                return TypedResults.Problem(
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    title: "Could not open File Explorer",
+                    detail: "Windows did not start File Explorer.");
+            }
+
+            return TypedResults.NoContent();
+        }
+        catch (FileNotFoundException)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "File not found",
+                detail: "The requested file does not exist inside the configured file search root.");
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "File not found",
+                detail: "The requested file does not exist inside the configured file search root.");
+        }
+        catch (Win32Exception)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Could not open File Explorer",
+                detail: "Windows could not start File Explorer for the requested file.");
+        }
+        catch (InvalidOperationException)
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Could not open File Explorer",
+                detail: "Windows could not start File Explorer for the requested file.");
+        }
     }
 
     private static Results<Ok<IReadOnlyList<DuplicateFileResponse>>, ProblemHttpResult> FindDuplicates(
@@ -93,6 +247,42 @@ public static class DuplicateFilesEndpoints
             var fullPath = Path.GetFullPath(Path.Combine(allowedRoot, requestedPath));
             var relativeToRoot = Path.GetRelativePath(allowedRoot, fullPath);
             if (Path.IsPathRooted(relativeToRoot) ||
+                relativeToRoot == ".." ||
+                relativeToRoot.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+                relativeToRoot.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            return fullPath;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+        catch (PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ResolveFilePath(string allowedRoot, string? requestedPath)
+    {
+        if (string.IsNullOrWhiteSpace(requestedPath) || !Path.IsPathRooted(requestedPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(requestedPath);
+            var relativeToRoot = Path.GetRelativePath(allowedRoot, fullPath);
+            if (relativeToRoot == "." ||
+                Path.IsPathRooted(relativeToRoot) ||
                 relativeToRoot == ".." ||
                 relativeToRoot.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
                 relativeToRoot.StartsWith($"..{Path.AltDirectorySeparatorChar}", StringComparison.Ordinal))

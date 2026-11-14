@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using FileInspector.API.Configuration;
 using FileInspector.API.Endpoints;
@@ -121,6 +122,75 @@ public sealed class DuplicateFilesEndpointTests
             "Leave blank",
             pathParameter.GetProperty("description").GetString(),
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DeleteFile_DeletesFileInsideConfiguredBaseDirectory()
+    {
+        using var directory = new TemporaryDirectory();
+        var filePath = Path.Combine(directory.Path, "duplicate.txt");
+        CreateFile(filePath, "duplicate");
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/api/files/delete")
+        {
+            Content = JsonContent.Create(new { fullPath = filePath })
+        };
+        using var response = await api.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.False(File.Exists(filePath));
+    }
+
+    [Fact]
+    public async Task DeleteFile_RejectsPathOutsideConfiguredBaseDirectory()
+    {
+        using var directory = new TemporaryDirectory();
+        using var outsideDirectory = new TemporaryDirectory();
+        var filePath = Path.Combine(outsideDirectory.Path, "protected.txt");
+        CreateFile(filePath, "do not delete");
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/api/files/delete")
+        {
+            Content = JsonContent.Create(new { fullPath = filePath })
+        };
+        using var response = await api.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.True(File.Exists(filePath));
+    }
+
+    [Fact]
+    public async Task DeleteFile_ReturnsNotFoundForMissingFile()
+    {
+        using var directory = new TemporaryDirectory();
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+        var filePath = Path.Combine(directory.Path, "missing.txt");
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, "/api/files/delete")
+        {
+            Content = JsonContent.Create(new { fullPath = filePath })
+        };
+        using var response = await api.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task OpenFileLocation_RejectsPathOutsideConfiguredBaseDirectory()
+    {
+        using var directory = new TemporaryDirectory();
+        using var outsideDirectory = new TemporaryDirectory();
+        var filePath = Path.Combine(outsideDirectory.Path, "protected.txt");
+        CreateFile(filePath, "do not open");
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var response = await api.Client.PostAsJsonAsync(
+            "/api/files/open-location",
+            new { fullPath = filePath });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private static void CreateFile(string path, string contents)
