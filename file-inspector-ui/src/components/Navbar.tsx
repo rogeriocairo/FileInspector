@@ -1,13 +1,11 @@
 import { Link, useLocation } from 'react-router-dom'
-import { File, Search, LayoutDashboard, FolderKanban } from 'lucide-react'
+import { Search, LayoutDashboard } from 'lucide-react'
 
 export const Navbar = () => {
   const location = useLocation()
 
   const navItems = [
-    { path: '/', label: 'Inspeção de Arquivo', icon: File },
     { path: '/duplicados', label: 'Arquivos Duplicados', icon: Search },
-    { path: '/comparar-pastas', label: 'Comparar Pastas', icon: FolderKanban },
   ]
 
   return (

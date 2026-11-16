@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertCircle, Check, Clock, Copy, FileText, FolderOpen, Search, Trash2 } from 'lucide-react'
+import { AlertCircle, ArrowDownWideNarrow, ArrowUpWideNarrow, Check, Clock, Copy, FileText, FolderOpen, Search, Trash2 } from 'lucide-react'
 import { deleteFile, findDuplicateFiles, handleApiError, openFileLocation } from '@/services/api'
 import type { DuplicateFileResponse } from '@/types'
 
@@ -11,6 +11,8 @@ export const DuplicateFiles = () => {
   const [deletingPath, setDeletingPath] = useState<string | null>(null)
   const [openingPath, setOpeningPath] = useState<string | null>(null)
   const [copiedPath, setCopiedPath] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<'name' | 'size'>('name')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   const duplicateGroups = files === null
     ? null
@@ -26,6 +28,34 @@ export const DuplicateFiles = () => {
           return groups
         }, new Map<string, { name: string; files: DuplicateFileResponse[] }>()),
       ).sort((a, b) => a[1].name.localeCompare(b[1].name))
+
+  const sortedDuplicateGroups = duplicateGroups === null
+    ? null
+    : duplicateGroups.map(([key, group]) => ({
+        key,
+        ...group,
+        maxSize: Math.max(...group.files.map((file) => file.sizeInBytes)),
+        files: [...group.files].sort((a, b) => {
+          const comparison = sortBy === 'size'
+            ? a.sizeInBytes - b.sizeInBytes
+            : a.fullPath.localeCompare(b.fullPath)
+          return sortDirection === 'asc' ? comparison : -comparison
+        }),
+      })).sort((a, b) => {
+        const comparison = sortBy === 'size'
+          ? a.maxSize - b.maxSize
+          : a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+        return sortDirection === 'asc' ? comparison : -comparison
+      })
+
+  const changeSort = (field: 'name' | 'size') => {
+    if (sortBy === field) {
+      setSortDirection((direction) => direction === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(field)
+      setSortDirection('asc')
+    }
+  }
 
   const formatBytes = (bytes: number): string => {
     if (bytes === 0) return '0 B'
@@ -153,24 +183,56 @@ export const DuplicateFiles = () => {
         </div>
       )}
 
-      {files !== null && duplicateGroups !== null && (
+      {files !== null && sortedDuplicateGroups !== null && (
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 bg-slate-50 border-b border-slate-200">
-            <h2 className="text-sm font-semibold text-slate-700">Resultados</h2>
-            <span className="text-xs font-medium text-slate-500">
-              {duplicateGroups.length} nomes · {files.length} caminhos
-            </span>
+          <div className="flex flex-col gap-3 p-4 bg-slate-50 border-b border-slate-200 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-700">Resultados</h2>
+              <span className="text-xs font-medium text-slate-500">
+                {sortedDuplicateGroups.length} nomes · {files.length} caminhos
+              </span>
+            </div>
+            <div className="flex items-center gap-2" role="group" aria-label="Ordenar resultados">
+              <span className="text-xs text-slate-500">Ordenar por:</span>
+              {(['name', 'size'] as const).map((field) => {
+                const isSelected = sortBy === field
+                const directionLabel = field === 'name'
+                  ? (sortDirection === 'asc' ? 'A-Z' : 'Z-A')
+                  : (sortDirection === 'asc' ? 'menor para maior' : 'maior para menor')
+                const label = field === 'name' ? 'Nome' : 'Tamanho'
+                const SortIcon = sortDirection === 'asc' ? ArrowUpWideNarrow : ArrowDownWideNarrow
+
+                return (
+                  <button
+                    key={field}
+                    type="button"
+                    onClick={() => changeSort(field)}
+                    aria-label={`Ordenar por ${label.toLocaleLowerCase()}${isSelected ? `: ${directionLabel}` : ''}`}
+                    aria-pressed={isSelected}
+                    title={field === 'size' ? 'Ordena grupos pelo maior arquivo e caminhos por tamanho' : undefined}
+                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      isSelected
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {label}
+                    {isSelected && <SortIcon className="h-3.5 w-3.5" />}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          {duplicateGroups.length === 0 ? (
+          {sortedDuplicateGroups.length === 0 ? (
             <div className="p-8 text-center">
               <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500">Nenhum arquivo duplicado encontrado.</p>
             </div>
           ) : (
             <ul className="divide-y divide-slate-200">
-              {duplicateGroups.map(([key, group]) => (
-                <li key={key} className="px-4 py-4">
+              {sortedDuplicateGroups.map((group) => (
+                <li key={group.key} className="px-4 py-4">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-slate-900">{group.name}</h3>
                     <span className="text-xs text-slate-500 whitespace-nowrap">

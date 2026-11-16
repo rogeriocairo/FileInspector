@@ -9,16 +9,3 @@ Accept: application/json
 ### Find duplicate file names under a subdirectory of Files
 GET {{FileInspector.API_HostAddress}}/api/files/duplicates?path=Samples
 Accept: application/json
-
-###
-
-### Inspect a file (replace the path with a local file)
-POST {{FileInspector.API_HostAddress}}/api/files/inspect
-Content-Type: multipart/form-data; boundary=FileInspectorBoundary
-
---FileInspectorBoundary
-Content-Disposition: form-data; name="file"; filename="README.md"
-Content-Type: text/markdown
-
-< ../README.md
---FileInspectorBoundary--

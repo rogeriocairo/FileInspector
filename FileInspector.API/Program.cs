@@ -1,7 +1,6 @@
 using FileInspector.API.Endpoints;
 using FileInspector.API.Configuration;
 using FileInspector.Application.DuplicateFiles;
-using FileInspector.Application.Files;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,7 +9,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddScoped<IDuplicateFileSearchService, DuplicateFileSearchService>();
-builder.Services.AddScoped<IFileInspectionService, FileInspectionService>();
 
 var configuredFileRoot = builder.Configuration["FileSearch:AllowedRoot"] ?? "Files";
 var allowedFileRoot = Path.GetFullPath(configuredFileRoot, builder.Environment.ContentRootPath);
@@ -33,7 +31,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.MapFilesEndpoints();
 app.MapDuplicateFilesEndpoints();
 
 app.Run();

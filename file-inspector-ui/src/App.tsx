@@ -1,8 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Navbar } from './components/Navbar'
-import { FileInspection } from './components/FileInspection'
 import { DuplicateFiles } from './components/DuplicateFiles'
-import { FolderComparison } from './components/FolderComparison'
 
 export default function App() {
   return (
@@ -11,9 +9,9 @@ export default function App() {
         <Navbar />
         <main className="pt-4">
           <Routes>
-            <Route path="/" element={<FileInspection />} />
+            <Route path="/" element={<Navigate to="/duplicados" replace />} />
             <Route path="/duplicados" element={<DuplicateFiles />} />
-            <Route path="/comparar-pastas" element={<FolderComparison />} />
+            <Route path="*" element={<Navigate to="/duplicados" replace />} />
           </Routes>
         </main>
       </div>

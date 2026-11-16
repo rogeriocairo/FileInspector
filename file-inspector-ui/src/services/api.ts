@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios'
-import type { FileInspectionResponse, DuplicateFileResponse, FolderFileResponse, ApiError } from '@/types'
+import type { DuplicateFileResponse, ApiError } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -10,27 +10,9 @@ const api = axios.create({
   },
 })
 
-export const inspectFile = async (file: File): Promise<FileInspectionResponse> => {
-  const formData = new FormData()
-  formData.append('file', file)
-
-  const response = await api.post<FileInspectionResponse>('/api/files/inspect', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  })
-  return response.data
-}
-
 export const findDuplicateFiles = async (path?: string): Promise<DuplicateFileResponse[]> => {
   const params = path ? { path } : {}
   const response = await api.get<DuplicateFileResponse[]>('/api/files/duplicates', { params })
-  return response.data
-}
-
-export const getFolderFiles = async (path?: string): Promise<FolderFileResponse[]> => {
-  const params = path ? { path } : {}
-  const response = await api.get<FolderFileResponse[]>('/api/files/duplicates', { params })
   return response.data
 }
 

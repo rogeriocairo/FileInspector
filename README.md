@@ -3,9 +3,9 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white">
 
-A modern .NET solution for file inspection, analysis, and metadata processing.
+A modern .NET solution for finding files with duplicate names.
 
-FileInspector is designed to help inspect files and directories, extract useful information, and expose that data through a clean API layer. The project follows a layered architecture to keep the codebase maintainable, testable, and easy to extend.
+FileInspector recursively searches a configured directory for files with duplicate names and exposes the results through a web interface and API.
 
 ## Overview
 
@@ -20,13 +20,9 @@ This separation helps maintain a clean architecture and supports future growth.
 
 ## Features
 
-- File and directory inspection
 - Recursive search for duplicate file names
-- Metadata extraction
-- File name, extension, size, declared content type, and SHA-256 inspection
-- Structured data processing
+- File name, size, last-modified date, and path display
 - REST API exposure
-- Extensible integration points for future automation workflows
 
 ## Requirements
 
@@ -42,23 +38,15 @@ Before running the project, make sure you have:
 FileInspector/
 ├── FileInspector.API/
 │   ├── Program.cs
-│   ├── Contracts/Files/FileInspectionResponse.cs
-│   ├── Contracts/Files/FileInspectionUploadRequest.cs
 │   ├── Contracts/Files/DuplicateFileResponse.cs
 │   ├── Configuration/DuplicateFileSearchOptions.cs
 │   ├── Endpoints/DuplicateFilesEndpoints.cs
-│   ├── Endpoints/FilesEndpoints.cs
 │   ├── FileInspector.API.csproj
 │   ├── FileInspector.API.http
 │   ├── appsettings.json
 │   ├── appsettings.Development.json
 │   └── Properties/
 ├── FileInspector.Application/
-│   ├── Files/
-│   │   ├── FileInspectionService.cs
-│   │   ├── FileInspectionResult.cs
-│   │   ├── FileTooLargeException.cs
-│   │   └── IFileInspectionService.cs
 │   ├── DuplicateFiles/
 │   │   ├── DuplicateFileEntry.cs
 │   │   ├── DuplicateFileSearchService.cs
@@ -124,19 +112,6 @@ http://localhost:5000/swagger
 
 The OpenAPI document is also available at `http://localhost:5000/openapi/v1.json`.
 
-## Inspect a file
-
-Send a file as `multipart/form-data` using the `file` field:
-
-```bash
-curl -X POST http://localhost:5000/api/files/inspect \
-  -F "file=@./README.md"
-```
-
-The endpoint returns the file name, extension, size in bytes, client-declared content type, and SHA-256 hash. Files larger than 10 MiB are rejected with `413 Payload Too Large`; a missing file is rejected with `400 Bad Request`. The request is streamed and the application does not persist the uploaded file.
-
-The same request can be run from `FileInspector.API.http` in VS Code.
-
 ## Find duplicate file names
 
 The API exposes `GET /api/files/duplicates`. It recursively searches for files whose names occur more than once, matching names case-insensitively. Duplicates are identified by name only, not by file content.
@@ -187,11 +162,8 @@ This structure favors maintainability, scalability, and automated testing.
 
 Planned next steps:
 
-1. Add unit and integration tests for the file inspection endpoint
-2. Add tests for recursive duplicate-name search and filesystem edge cases
-3. Inspect file content and identify supported formats
-4. Add appropriate validation and security checks for supported file types
-5. Improve API usability and documentation
+1. Add tests for recursive duplicate-name search and filesystem edge cases
+2. Improve API usability and documentation
 
 ## Contributing
 
