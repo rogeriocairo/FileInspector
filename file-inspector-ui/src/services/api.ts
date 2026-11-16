@@ -58,5 +58,8 @@ export const handleApiError = (error: unknown): ApiError => {
       status: axiosError.response?.status,
     }
   }
+  if (error instanceof Error) {
+    return { detail: error.message, title: 'Erro', status: 500 }
+  }
   return { detail: 'Erro inesperado', title: 'Erro', status: 500 }
 }

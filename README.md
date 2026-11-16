@@ -25,6 +25,7 @@ This separation helps maintain a clean architecture and supports future growth.
 - In-app previews for supported text, image, and PDF files
 - Highlighting duplicate-name groups whose file sizes differ
 - Sending deleted files to the Windows Recycle Bin
+- Searching duplicate names across the connected user's Google Drive
 - REST API exposure
 
 ## Requirements
@@ -147,6 +148,20 @@ In the web interface, use **Visualizar arquivo** to preview supported text files
 The preview endpoint is `GET /api/files/preview?fullPath=<absolute-path>`. It only serves the supported text, image, and PDF formats and only for files inside the configured file search root.
 
 Use the delete action in the web interface to move a file to the Windows Recycle Bin. Files are not permanently deleted if moving them to the Recycle Bin fails. This operation is only supported when the API runs on Windows.
+
+## Google Drive
+
+The duplicate-files page can connect directly to Google Drive. It recursively searches files in the connected user's **My Drive**, previews supported files, opens Google Docs in Drive, and moves selected files to the Drive trash. Google Drive credentials are held only in the current browser session and are not sent to the FileInspector API.
+
+To enable the connection:
+
+1. In Google Cloud Console, create a project and enable the Google Drive API.
+2. Configure the OAuth consent screen and add your account as a test user while the app is in testing.
+3. Create an OAuth client ID for a web application and add the UI origin (for local development, `http://localhost:3000`) as an authorized JavaScript origin.
+4. Copy `file-inspector-ui/.env.example` to `file-inspector-ui/.env.local` and set `VITE_GOOGLE_CLIENT_ID` to the client ID. Do not put a client secret in the frontend.
+5. Restart the Vite development server and choose **Google Drive** in the duplicate-files page.
+
+The app requests the Google Drive `drive` scope because it needs to list, download, and move files to the Drive trash. Google may require OAuth verification before the app can be used by accounts beyond configured test users. Shared drives are not included in the My Drive scan.
 
 ## Tests
 

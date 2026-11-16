@@ -5,6 +5,7 @@
 
 # dotenv files
 .env
+file-inspector-ui/.env.local
 
 # User-specific files
 *.rsuser

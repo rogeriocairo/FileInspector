@@ -3,6 +3,10 @@ export interface DuplicateFileResponse {
   sizeInBytes: number
   lastModifiedUtc: string
   fullPath: string
+  source?: 'googleDrive'
+  driveFileId?: string
+  driveMimeType?: string
+  webViewLink?: string
 }
 
 export interface ApiError {
