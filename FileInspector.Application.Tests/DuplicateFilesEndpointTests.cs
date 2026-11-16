@@ -60,6 +60,30 @@ public sealed class DuplicateFilesEndpointTests
         Assert.Equal(2, body.RootElement.GetArrayLength());
     }
 
+    [Fact]
+    public async Task GetDuplicates_ReturnsDifferentLastModifiedTimestampsForSameName()
+    {
+        using var directory = new TemporaryDirectory();
+        var firstFile = Path.Combine(directory.Path, "duplicate.txt");
+        var secondFile = Path.Combine(directory.Path, "nested", "DUPLICATE.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(secondFile)!);
+        CreateFile(firstFile, "first");
+        CreateFile(secondFile, "second");
+        File.SetLastWriteTimeUtc(firstFile, new DateTime(2024, 1, 1, 10, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(secondFile, new DateTime(2024, 1, 2, 11, 0, 0, DateTimeKind.Utc));
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var response = await api.Client.GetAsync("/api/files/duplicates");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var timestamps = body.RootElement.EnumerateArray()
+            .Select(file => file.GetProperty("lastModifiedUtc").GetDateTimeOffset())
+            .ToArray();
+        Assert.Equal(2, timestamps.Length);
+        Assert.NotEqual(timestamps[0], timestamps[1]);
+    }
+
     [Theory]
     [InlineData("..%2F..")]
     [InlineData("%2E%2E%5C%2E%2E")]
@@ -125,6 +149,92 @@ public sealed class DuplicateFilesEndpointTests
     }
 
     [Fact]
+    public async Task PreviewFile_ServesSupportedTextAsPlainText()
+    {
+        using var directory = new TemporaryDirectory();
+        const string contents = "Preview this text safely.";
+        var filePath = Path.Combine(directory.Path, "preview.md");
+        CreateFile(filePath, contents);
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var response = await api.Client.GetAsync(
+            $"/api/files/preview?fullPath={Uri.EscapeDataString(filePath)}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(contents, await response.Content.ReadAsStringAsync());
+        Assert.Equal("inline", response.Content.Headers.ContentDisposition?.DispositionType);
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+    }
+
+    [Fact]
+    public async Task PreviewFile_ServesSupportedImagesWithImageContentType()
+    {
+        using var directory = new TemporaryDirectory();
+        var imageBytes = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+        var filePath = Path.Combine(directory.Path, "preview.png");
+        File.WriteAllBytes(filePath, imageBytes);
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var response = await api.Client.GetAsync(
+            $"/api/files/preview?fullPath={Uri.EscapeDataString(filePath)}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(imageBytes, await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Theory]
+    [InlineData("preview.jpg", "image/jpeg")]
+    [InlineData("preview.JPG", "image/jpeg")]
+    [InlineData("preview.pdf", "application/pdf")]
+    public async Task PreviewFile_ServesJpegAndPdfWithInlineContentType(string fileName, string expectedContentType)
+    {
+        using var directory = new TemporaryDirectory();
+        var fileBytes = new byte[] { 1, 2, 3, 4 };
+        var filePath = Path.Combine(directory.Path, fileName);
+        File.WriteAllBytes(filePath, fileBytes);
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var response = await api.Client.GetAsync(
+            $"/api/files/preview?fullPath={Uri.EscapeDataString(filePath)}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(expectedContentType, response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(fileBytes, await response.Content.ReadAsByteArrayAsync());
+        Assert.Equal("inline", response.Content.Headers.ContentDisposition?.DispositionType);
+    }
+
+    [Fact]
+    public async Task PreviewFile_RejectsPathOutsideConfiguredBaseDirectory()
+    {
+        using var directory = new TemporaryDirectory();
+        using var outsideDirectory = new TemporaryDirectory();
+        var filePath = Path.Combine(outsideDirectory.Path, "outside.txt");
+        CreateFile(filePath, "outside");
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var response = await api.Client.GetAsync(
+            $"/api/files/preview?fullPath={Uri.EscapeDataString(filePath)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PreviewFile_RejectsUnsupportedFileTypes()
+    {
+        using var directory = new TemporaryDirectory();
+        var filePath = Path.Combine(directory.Path, "document.docx");
+        CreateFile(filePath, "not a previewable file");
+        await using var api = await DuplicateFilesTestApi.StartAsync(directory.Path);
+
+        using var response = await api.Client.GetAsync(
+            $"/api/files/preview?fullPath={Uri.EscapeDataString(filePath)}");
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
+
+    [Fact]
     public async Task DeleteFile_DeletesFileInsideConfiguredBaseDirectory()
     {
         using var directory = new TemporaryDirectory();
@@ -138,8 +248,16 @@ public sealed class DuplicateFilesEndpointTests
         };
         using var response = await api.Client.SendAsync(request);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.False(File.Exists(filePath));
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            Assert.False(File.Exists(filePath));
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.NotImplemented, response.StatusCode);
+            Assert.True(File.Exists(filePath));
+        }
     }
 
     [Fact]

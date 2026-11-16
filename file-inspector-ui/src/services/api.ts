@@ -16,6 +16,24 @@ export const findDuplicateFiles = async (path?: string): Promise<DuplicateFileRe
   return response.data
 }
 
+export const getFilePreview = async (fullPath: string, signal?: AbortSignal): Promise<string> => {
+  const response = await api.get<string>('/api/files/preview', {
+    params: { fullPath },
+    responseType: 'text',
+    signal,
+  })
+  return response.data
+}
+
+export const getFilePreviewBlob = async (fullPath: string, signal?: AbortSignal): Promise<Blob> => {
+  const response = await api.get<Blob>('/api/files/preview', {
+    params: { fullPath },
+    responseType: 'blob',
+    signal,
+  })
+  return response.data
+}
+
 export const deleteFile = async (fullPath: string): Promise<void> => {
   await api.delete('/api/files/delete', { data: { fullPath } })
 }

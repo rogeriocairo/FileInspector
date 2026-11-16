@@ -22,6 +22,9 @@ This separation helps maintain a clean architecture and supports future growth.
 
 - Recursive search for duplicate file names
 - File name, size, last-modified date, and path display
+- In-app previews for supported text, image, and PDF files
+- Highlighting duplicate-name groups whose file sizes differ
+- Sending deleted files to the Windows Recycle Bin
 - REST API exposure
 
 ## Requirements
@@ -138,6 +141,12 @@ GET http://localhost:5000/api/files/duplicates?path=Samples
 ```
 
 The route is available in Swagger UI and in `FileInspector.API.http`. It returns `400 Bad Request` for invalid paths, `404 Not Found` when the selected directory does not exist, and `200 OK` with an empty list when no duplicate names are found.
+
+In the web interface, use **Visualizar arquivo** to preview supported text files (`.txt`, `.md`, `.csv`, `.json`, `.xml`, `.log`, `.yaml`, `.yml`, `.ini`), images (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`), and PDFs. Other formats are not previewed. If files with the same name have different sizes or modification dates/times, the corresponding values in that group are highlighted in pale yellow.
+
+The preview endpoint is `GET /api/files/preview?fullPath=<absolute-path>`. It only serves the supported text, image, and PDF formats and only for files inside the configured file search root.
+
+Use the delete action in the web interface to move a file to the Windows Recycle Bin. Files are not permanently deleted if moving them to the Recycle Bin fails. This operation is only supported when the API runs on Windows.
 
 ## Tests
 
